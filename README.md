@@ -262,90 +262,6 @@ py test_workflow.py
 py test_api.py
 ```
 
-All tests verify:
-- ✓ Correct status codes
-- ✓ Response schema validation
-- ✓ State passing between nodes
-- ✓ Execution logging accuracy
-
-## Future Improvements
-
-With more time, consider implementing:
-
-### 1. **Database Persistence**
-   - Replace in-memory `run_history` with SQLite/PostgreSQL
-   - Store graphs and run results for long-term auditing
-   - Query execution history: `GET /runs?graph_id=X&status=error`
-
-### 2. **Parallel Execution**
-   - Execute independent nodes concurrently (async/await improvements)
-   - Reduce execution time for DAGs with parallelizable paths
-   - Use `asyncio.gather()` for independent node execution
-
-### 3. **Advanced Branching**
-   - Switch/case-style routing (multiple conditions)
-   - Join nodes (merge multiple branches)
-   - Default/fallback edges if no conditions match
-
-### 4. **Workflow Visualization**
-   - `/graph/visualize/{graph_id}` endpoint returning SVG/Mermaid diagram
-   - Interactive graph editor UI
-   - Visual debugging of execution flows
-
-### 5. **Debugging & Monitoring**
-   - Real-time execution tracing (WebSocket updates)
-   - Breakpoints and step-through execution
-   - Performance profiling per node
-   - Error recovery strategies (retry logic)
-
-### 6. **Dynamic Node Registration**
-   - Register nodes at runtime without code changes
-   - Hot-reload workflow definitions
-   - YAML/JSON workflow DSL parser
-
-### 7. **Deployment**
-   - Docker containerization (Dockerfile)
-   - Kubernetes manifests
-   - CI/CD pipeline setup
-   - Multi-worker Uvicorn configuration
-
-### 8. **Additional Sample Workflows**
-   - **Data Summarization**: Extract → Tokenize → Summarize → Format
-   - **Data Quality Checks**: Validate → Profile → Report
-   - **Document Processing**: Parse → Extract → Enrich → Store
-   - **Form Validation**: Validate input → Check rules → Notify
-
-### 9. **Security Enhancements**
-   - Authentication & authorization (JWT tokens)
-   - Rate limiting per user/API key
-   - Input validation & sanitization
-   - Audit logging of all operations
-
-### 10. **Configuration Management**
-   - Environment-based configs (.env files)
-   - Feature flags for A/B testing
-   - Workflow versioning and rollback
-   - Tool/node whitelisting
-
-## Implementation Notes
-
-### Design Decisions
-
-1. **Pure Python Functions**: Nodes are simple callables for clarity and testability
-2. **Dictionary-based State**: Flexible, human-readable state passing (vs. Pydantic models everywhere)
-3. **In-Memory Storage**: No DB complexity for MVP; easy to upgrade later
-4. **No ML Libraries**: Focuses on rule-based logic; demonstrates software architecture skills
-5. **Type Hints**: Pydantic models + type annotations for clean code
-
-### Why No Machine Learning?
-
-The assignment explicitly asks to avoid ML models. The focus is on demonstrating:
-- Clean Python code structure
-- Correct async/await patterns (where applicable)
-- Type safety with Pydantic
-- API design best practices
-- Workflow orchestration logic
-
 ## Evaluation Checklist
 
 ✅ **Phase 1: Core Functionality**
@@ -399,5 +315,3 @@ py test_workflow.py  # Verify engine
 py test_api.py       # Verify API
 py run_server.py     # Start server
 ```
-
-Then visit: `http://localhost:8000/docs`
