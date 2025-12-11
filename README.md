@@ -34,7 +34,7 @@ A FastAPI-based rule-based workflow engine that executes directed acyclic graphs
 
 Clone and setup:
 ```bash
-git clone <repo-url>
+git clone https://github.com/Numball/LangGraph.git
 cd LangGraph
 pip install -r requirements.txt
 ```
@@ -65,9 +65,6 @@ Output: Tests all three endpoints with sample graph and state queries.
 py run_server.py
 ```
 
-Server runs on `http://localhost:8000`
-- API docs (interactive): `http://localhost:8000/docs`
-- ReDoc (alternative): `http://localhost:8000/redoc`
 
 ### 4. Example API Calls
 
