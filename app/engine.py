@@ -1,4 +1,14 @@
-"""Core workflow engine with support for nodes, edges, branching, and looping."""
+"""Core workflow engine with support for nodes, edges, branching, and looping.
+
+This module implements the fundamental building blocks of our minimal workflow engine:
+- Node: A pure Python function that processes state
+- Edge: A directed connection between nodes with optional conditional routing
+- Graph: A container that manages nodes, edges, and orchestrates execution
+- WorkflowEngine: High-level API for creating and executing workflow graphs
+
+We use a queue-based execution model with state passing between nodes,
+supporting both linear workflows and complex branching logic.
+"""
 
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -7,7 +17,7 @@ from enum import Enum
 
 
 class NodeStatus(str, Enum):
-    """Status of a node execution."""
+    """Possible outcomes of node execution: success, error, or skipped."""
     SUCCESS = "success"
     ERROR = "error"
     SKIPPED = "skipped"
@@ -15,7 +25,7 @@ class NodeStatus(str, Enum):
 
 @dataclass
 class ExecutionEntry:
-    """Single execution log entry."""
+    """Record of a single node's execution in a workflow run."""
     node_name: str
     status: NodeStatus
     input_state: Dict[str, Any]
@@ -24,96 +34,110 @@ class ExecutionEntry:
 
 
 class Node:
-    """Represents a node in the workflow graph."""
+    """A single step in a workflow graph that wraps a pure Python function."""
     
     def __init__(self, name: str, func: Callable, node_type: str = "task"):
-        """
-        Initialize a node.
+        """Initialize a workflow node.
         
         Args:
-            name: Unique identifier for the node
-            func: Pure Python function that takes state dict and returns updated state
-            node_type: Type of node (task, conditional, etc.)
+            name: Unique identifier for this node
+            func: Pure Python function (state: Dict) -> Dict
+            node_type: Classification of the node (default: "task")
         """
         self.name = name
         self.func = func
         self.node_type = node_type
     
     def execute(self, state: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[str]]:
-        """
-        Execute the node function.
+        """Execute the node function on the given state.
         
         Args:
             state: Current workflow state
             
         Returns:
-            Tuple of (updated_state, error_message)
+            Tuple of (updated_state, error_message) where error_message is None on success
         """
         try:
+            # Pass a copy to prevent accidental mutations
             updated_state = self.func(state.copy())
             return updated_state, None
         except Exception as e:
+            # Catch and return errors for logging
             return state, str(e)
 
 
 class Edge:
-    """Represents an edge connecting two nodes."""
+    """A directed connection between two nodes, optionally with conditional routing."""
     
     def __init__(self, source: str, target: str, condition: Optional[Callable] = None):
-        """
-        Initialize an edge.
+        """Create an edge between two nodes.
         
         Args:
-            source: Source node name
-            target: Target node name
-            condition: Optional function that evaluates state to determine if edge should be taken
+            source: Name of the source node
+            target: Name of the target node
+            condition: Optional function (state: Dict) -> bool for conditional routing
         """
         self.source = source
         self.target = target
         self.condition = condition
     
     def should_execute(self, state: Dict[str, Any]) -> bool:
-        """Check if this edge should be traversed."""
+        """Check if we should traverse this edge based on its condition.
+        
+        Args:
+            state: Current workflow state
+            
+        Returns:
+            True if edge should be traversed, False otherwise
+        """
         if self.condition is None:
             return True
         try:
             return self.condition(state)
         except Exception:
+            # Handle condition errors gracefully
             return False
 
 
 class Graph:
-    """Directed acyclic graph for workflow execution."""
+    """A workflow represented as a directed graph of nodes and edges."""
     
     def __init__(self, name: str):
-        """
-        Initialize a graph.
+        """Create a new workflow graph.
         
         Args:
-            name: Graph identifier
+            name: Human-readable name for the workflow
         """
         self.id = str(uuid.uuid4())
         self.name = name
         self.nodes: Dict[str, Node] = {}
-        self.edges: Dict[str, List[Edge]] = {}  # source_node -> list of outgoing edges
+        self.edges: Dict[str, List[Edge]] = {}
     
     def add_node(self, name: str, func: Callable, node_type: str = "task") -> None:
-        """Add a node to the graph."""
+        """Add a node to the graph.
+        
+        Args:
+            name: Unique identifier for this node
+            func: The function this node will execute
+            node_type: Classification of the node
+        """
         self.nodes[name] = Node(name, func, node_type)
         if name not in self.edges:
             self.edges[name] = []
     
     def add_edge(self, source: str, target: str, condition: Optional[Callable] = None) -> None:
-        """
-        Add an edge from source to target node.
+        """Connect two nodes with a directed edge.
         
         Args:
             source: Source node name
             target: Target node name
-            condition: Optional condition function for conditional routing
+            condition: Optional condition function for selective routing
+            
+        Raises:
+            ValueError: If source or target nodes don't exist
         """
         if source not in self.nodes or target not in self.nodes:
-            raise ValueError(f"Invalid edge: nodes must exist ({source} -> {target})")
+            raise ValueError(f"Invalid edge: both nodes must exist ({source} -> {target})")
         
         if source not in self.edges:
             self.edges[source] = []
@@ -121,11 +145,10 @@ class Graph:
         self.edges[source].append(Edge(source, target, condition))
     
     def _get_next_nodes(self, current_node: str, state: Dict[str, Any]) -> List[str]:
-        """
-        Get next nodes to execute based on edges and conditions.
+        """Get next nodes to execute based on edge conditions.
         
         Args:
-            current_node: Current node name
+            current_node: The node that just completed
             state: Current workflow state
             
         Returns:
@@ -144,19 +167,18 @@ class Graph:
         start_nodes: Optional[List[str]] = None,
         max_iterations: int = 100
     ) -> Tuple[Dict[str, Any], List[ExecutionEntry]]:
-        """
-        Execute the graph starting from specified nodes.
+        """Execute the workflow graph using queue-based orchestration.
         
         Args:
-            initial_state: Initial state dictionary
-            start_nodes: List of node names to start from (defaults to all nodes with no incoming edges)
-            max_iterations: Maximum iterations to prevent infinite loops
+            initial_state: Starting state for the workflow
+            start_nodes: Nodes to begin execution from (auto-detects entry nodes if None)
+            max_iterations: Safety limit to prevent infinite loops
             
         Returns:
             Tuple of (final_state, execution_log)
         """
         if start_nodes is None:
-            # Find nodes with no incoming edges
+            # Auto-detect entry nodes (nodes with no incoming edges)
             incoming = set()
             for edges in self.edges.values():
                 for edge in edges:
@@ -173,7 +195,7 @@ class Graph:
             iteration += 1
             node_name = queue.pop(0)
             
-            # Prevent infinite loops by tracking executed nodes per iteration cycle
+            # Prevent infinite loops: skip re-execution after seeing all nodes
             if node_name in executed and iteration > len(self.nodes):
                 continue
             
@@ -183,7 +205,7 @@ class Graph:
             node = self.nodes[node_name]
             input_state = state.copy()
             
-            # Execute the node
+            # Execute the node and capture state transformation
             state, error = node.execute(state)
             
             status = NodeStatus.ERROR if error else NodeStatus.SUCCESS
@@ -197,7 +219,7 @@ class Graph:
             
             executed.add(node_name)
             
-            # Add next nodes to queue
+            # Queue next nodes based on edge conditions
             next_nodes = self._get_next_nodes(node_name, state)
             queue.extend(next_nodes)
         
@@ -205,21 +227,35 @@ class Graph:
 
 
 class WorkflowEngine:
-    """High-level workflow execution engine."""
+    """High-level API for creating and executing workflow graphs."""
     
     def __init__(self):
-        """Initialize the workflow engine."""
+        """Initialize a workflow engine instance."""
         self.graphs: Dict[str, Graph] = {}
         self.run_history: Dict[str, Tuple[Dict[str, Any], List[ExecutionEntry]]] = {}
     
     def create_graph(self, name: str) -> Graph:
-        """Create a new graph."""
+        """Create and register a new workflow graph.
+        
+        Args:
+            name: Human-readable name for the workflow
+            
+        Returns:
+            The newly created Graph object
+        """
         graph = Graph(name)
         self.graphs[graph.id] = graph
         return graph
     
     def get_graph(self, graph_id: str) -> Optional[Graph]:
-        """Retrieve a graph by ID."""
+        """Retrieve a graph by its ID.
+        
+        Args:
+            graph_id: The unique identifier of the graph
+            
+        Returns:
+            The Graph object if found, None otherwise
+        """
         return self.graphs.get(graph_id)
     
     def run_graph(
@@ -228,20 +264,22 @@ class WorkflowEngine:
         initial_state: Dict[str, Any],
         max_iterations: int = 100
     ) -> Tuple[str, Dict[str, Any], List[ExecutionEntry]]:
-        """
-        Execute a graph.
+        """Execute a workflow graph and record results.
         
         Args:
-            graph_id: Graph identifier
-            initial_state: Initial workflow state
-            max_iterations: Maximum iterations for loop prevention
+            graph_id: The identifier of the graph to execute
+            initial_state: The starting state for the workflow
+            max_iterations: Safety limit on iterations
             
         Returns:
             Tuple of (run_id, final_state, execution_log)
+            
+        Raises:
+            ValueError: If graph_id is not found
         """
         graph = self.graphs.get(graph_id)
         if not graph:
-            raise ValueError(f"Graph {graph_id} not found")
+            raise ValueError(f"Graph {graph_id} not found in engine")
         
         final_state, execution_log = graph.execute(initial_state, max_iterations=max_iterations)
         run_id = str(uuid.uuid4())
@@ -250,5 +288,12 @@ class WorkflowEngine:
         return run_id, final_state, execution_log
     
     def get_run_state(self, run_id: str) -> Optional[Tuple[Dict[str, Any], List[ExecutionEntry]]]:
-        """Retrieve the final state and log of a run."""
+        """Retrieve the results of a previous workflow execution.
+        
+        Args:
+            run_id: The identifier of the execution to query
+            
+        Returns:
+            Tuple of (final_state, execution_log) if found, None otherwise
+        """
         return self.run_history.get(run_id)
