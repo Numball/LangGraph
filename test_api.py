@@ -89,7 +89,7 @@ if __name__ == "__main__":
     try:
         test_api()
     except Exception as e:
-        print(f"\n✗ Error: {e}")
+        print(f"\nX Error: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

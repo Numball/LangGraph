@@ -97,7 +97,7 @@ if __name__ == "__main__":
     try:
         test_code_review_workflow()
     except Exception as e:
-        print(f"\n✗ Error during test: {e}")
+        print(f"\nX Error during test: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
